@@ -1,3 +1,56 @@
+//Project Type
+enum ProjectStatus {
+  Active,
+  Finished,
+}
+
+class Project {
+  constructor(
+    public id: string,
+    public title: string,
+    public description: string,
+    public people: number,
+    public status: ProjectStatus
+  ) {}
+}
+
+//Project state management
+type Listener = (items: Project[]) => void;
+class ProjectState {
+  private listeners: Listener[] = [];
+  private projects: Project[] = [];
+  private static instance: ProjectState;
+
+  private constructor() {}
+
+  static getInstanse() {
+    if (this.instance) return this.instance;
+    this.instance = new ProjectState();
+    return this.instance;
+  }
+
+  addListener(listenerFn: Listener) {
+    this.listeners.push(listenerFn);
+  }
+
+  addProject(title: string, description: string, numOfPeople: number) {
+    const newProject = new Project(
+      Math.random().toString(),
+      title,
+      description,
+      numOfPeople,
+      ProjectStatus.Active
+    );
+
+    this.projects.push(newProject);
+    for (const listenerFn of this.listeners) {
+      listenerFn(this.projects.slice());
+    }
+  }
+}
+
+const projectState = ProjectState.getInstanse();
+
 //autobind decorator
 function Autobind(_: any, _2: string, descriptor: PropertyDescriptor) {
   const originalMethod = descriptor.value;
@@ -32,28 +85,80 @@ function validate(validatableInput: Validatable) {
     typeof validatableInput.value === 'string'
   ) {
     isValid =
-      isValid && validatableInput.value.length > validatableInput.minLength;
+      isValid && validatableInput.value.length >= validatableInput.minLength;
   }
   if (
     validatableInput.maxLength != null &&
     typeof validatableInput.value === 'string'
   ) {
     isValid =
-      isValid && validatableInput.value.length < validatableInput.maxLength;
+      isValid && validatableInput.value.length <= validatableInput.maxLength;
   }
   if (
     validatableInput.minValue != null &&
     typeof validatableInput.value === 'number'
   ) {
-    isValid = isValid && validatableInput.value > validatableInput.minValue;
+    isValid = isValid && validatableInput.value >= validatableInput.minValue;
   }
   if (
     validatableInput.maxValue != null &&
     typeof validatableInput.value === 'number'
   ) {
-    isValid = isValid && validatableInput.value < validatableInput.maxValue;
+    isValid = isValid && validatableInput.value <= validatableInput.maxValue;
   }
   return isValid;
+}
+
+//ProjectList class
+class ProjectList {
+  templateElem: HTMLTemplateElement;
+  hostElem: HTMLDivElement;
+  elem: HTMLElement;
+  assignedProjects: Project[];
+
+  constructor(private type: 'active' | 'finished') {
+    this.templateElem = document.getElementById(
+      'project-list'
+    )! as HTMLTemplateElement;
+    this.hostElem = document.getElementById('app')! as HTMLDivElement;
+
+    const importedNode = document.importNode(this.templateElem.content, true);
+
+    this.elem = importedNode.firstElementChild as HTMLElement;
+    this.elem.id = `${this.type}-projects`;
+    this.assignedProjects = [];
+
+    projectState.addListener((projects: Project[]) => {
+      this.assignedProjects = projects;
+      this.renderProjects();
+    });
+
+    this.attach();
+    this.renderContent();
+  }
+
+  private renderProjects() {
+    const listEl = document.getElementById(
+      `${this.type}-projects-list`
+    )! as HTMLUListElement;
+    for (const prjItem of this.assignedProjects) {
+      const listItem = document.createElement('li');
+      listItem.textContent = prjItem.title;
+      listEl.appendChild(listItem);
+    }
+  }
+
+  private attach() {
+    this.hostElem.insertAdjacentElement('beforeend', this.elem);
+  }
+
+  private renderContent() {
+    this.elem.querySelector(
+      'h2'
+    )!.textContent = `${this.type.toUpperCase()} PROJECTS`;
+    const listId = `${this.type}-projects-list`;
+    this.elem.querySelector('ul')!.id = listId;
+  }
 }
 
 //ProjectInput class
@@ -135,7 +240,7 @@ class ProjectInput {
     const userInput = this.getInputValues();
     if (Array.isArray(userInput)) {
       const [title, descr, people] = userInput;
-      console.log(title, descr, people);
+      projectState.addProject(title, descr, people);
       this.clearInputs();
     }
   }
@@ -149,4 +254,6 @@ class ProjectInput {
   }
 }
 
-const projInp = new ProjectInput();
+const projInput = new ProjectInput();
+const activeProjList = new ProjectList('active');
+const finishedProjList = new ProjectList('finished');
